@@ -1,18 +1,34 @@
 [package]
-name = "ascii-worker"
-version = "0.1.0"
+name = "ascii-maker"
+version = "0.2.0"
 edition = "2024"
-
+description = "Image to ASCII art, with a CLI and a WebAssembly frontend"
 
 [lib]
-crate-type = ["cdylib"]
+name = "ascii_maker"
+crate-type = ["cdylib", "rlib"]
 
+[[bin]]
+name = "asciimaker"
+path = "src/bin/asciimaker.rs"
 
 [dependencies]
-console_error_panic_hook = "0.1"
-wasm-bindgen = "0.2.100"  # Make sure this matches your CLI version
-js-sys = "0.3.77"         # Should be compatible
-web-sys = { version = "0.3", features = ["console"] }
 image = "0.25.6"
-brotli = "8.0.2"
-lazy_static = "1.5.0"
+
+# The CLI frontend. wasm-pack builds only the library, so these never reach the
+# web build.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+rayon = "1.10"
+
+# The web frontend.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+console_error_panic_hook = "0.1"
+js-sys = "0.3.77"
+wasm-bindgen = "0.2.100"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1

@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ASCII Image Processor</title>
+    <title>ascii-maker</title>
     <style>
         * {
             margin: 0;
@@ -27,9 +27,16 @@
 
         h1 {
             text-align: center;
-            margin-bottom: 30px;
+            margin-bottom: 6px;
             color: #58a6ff;
             font-size: clamp(1.5rem, 4vw, 2.5rem);
+        }
+
+        .tagline {
+            text-align: center;
+            color: #7d8590;
+            font-size: 14px;
+            margin-bottom: 24px;
         }
 
         .controls {
@@ -40,17 +47,12 @@
             margin-bottom: 20px;
         }
 
-        .file-input-wrapper {
-            position: relative;
-            margin-bottom: 20px;
-        }
-
         .file-input {
             display: none;
         }
 
         .file-label {
-            display: inline-block;
+            display: block;
             padding: 12px 24px;
             background: #21262d;
             border: 2px dashed #30363d;
@@ -58,8 +60,8 @@
             cursor: pointer;
             text-align: center;
             transition: all 0.3s ease;
-            width: 100%;
             font-size: 16px;
+            margin-bottom: 20px;
         }
 
         .file-label:hover {
@@ -75,9 +77,46 @@
 
         .settings {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 20px;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 16px;
             margin-bottom: 20px;
+            align-items: start;
+        }
+
+        .card {
+            background: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            padding: 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .card h2 {
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: #58a6ff;
+            font-weight: 700;
+        }
+
+        .card label:not(.check) {
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .sub {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            border-left: 2px solid #30363d;
+            padding-left: 12px;
+        }
+
+        .disabled {
+            opacity: 0.4;
+            pointer-events: none;
         }
 
         .setting-group {
@@ -86,10 +125,21 @@
             gap: 8px;
         }
 
-        .setting-group label {
-            color: #f0f6fc;
+        .setting-group > label,
+        .setting-group > .group-title {
             font-size: 14px;
             font-weight: 600;
+        }
+
+        .setting-group.disabled {
+            opacity: 0.4;
+            pointer-events: none;
+        }
+
+        .hint {
+            font-size: 11px;
+            color: #7d8590;
+            font-weight: normal;
         }
 
         .slider-container {
@@ -111,16 +161,16 @@
         .slider::-webkit-slider-thumb {
             -webkit-appearance: none;
             appearance: none;
-            width: 20px;
-            height: 20px;
+            width: 18px;
+            height: 18px;
             background: #58a6ff;
             border-radius: 50%;
             cursor: pointer;
         }
 
         .slider::-moz-range-thumb {
-            width: 20px;
-            height: 20px;
+            width: 18px;
+            height: 18px;
             background: #58a6ff;
             border-radius: 50%;
             cursor: pointer;
@@ -128,59 +178,72 @@
         }
 
         .slider-value {
-            min-width: 40px;
-            text-align: center;
+            min-width: 42px;
+            text-align: right;
             font-weight: bold;
             color: #58a6ff;
         }
 
-        .toggle-container {
+        select {
+            background: #0d1117;
+            color: #f0f6fc;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            padding: 8px;
+            font-family: inherit;
+            font-size: 14px;
+        }
+
+        .checks {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .check {
             display: flex;
             align-items: center;
-            gap: 12px;
-        }
-
-        .toggle {
-            position: relative;
-            width: 50px;
-            height: 24px;
-            background: #30363d;
-            border-radius: 12px;
+            gap: 8px;
+            font-size: 14px;
             cursor: pointer;
-            transition: background 0.3s ease;
+            user-select: none;
         }
 
-        .toggle.active {
-            background: #238636;
+        .check input {
+            accent-color: #238636;
+            width: 16px;
+            height: 16px;
+            cursor: pointer;
         }
 
-        .toggle-thumb {
-            position: absolute;
-            top: 2px;
-            left: 2px;
-            width: 20px;
-            height: 20px;
-            background: white;
-            border-radius: 50%;
-            transition: transform 0.3s ease;
+        .btn {
+            padding: 10px 18px;
+            background: #21262d;
+            color: #f0f6fc;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-family: inherit;
         }
 
-        .toggle.active .toggle-thumb {
-            transform: translateX(26px);
+        .btn:hover:not(:disabled) {
+            border-color: #58a6ff;
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
         }
 
         .process-btn {
             width: 100%;
             padding: 12px 24px;
             background: #238636;
-            color: white;
             border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 16px;
+            color: white;
             font-weight: 600;
-            transition: background 0.3s ease;
-            font-family: inherit;
+            font-size: 16px;
         }
 
         .process-btn:hover:not(:disabled) {
@@ -190,7 +253,6 @@
         .process-btn:disabled {
             background: #30363d;
             color: #7d8590;
-            cursor: not-allowed;
         }
 
         .output-container {
@@ -202,7 +264,7 @@
 
         .output-header {
             background: #161b22;
-            padding: 12px 20px;
+            padding: 10px 16px;
             border-bottom: 1px solid #30363d;
             display: flex;
             justify-content: space-between;
@@ -211,9 +273,11 @@
             gap: 10px;
         }
 
-        .output-title {
-            font-weight: 600;
-            color: #f0f6fc;
+        .output-actions {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            flex-wrap: wrap;
         }
 
         .progress-info {
@@ -222,78 +286,37 @@
         }
 
         .ascii-output {
-            padding: 20px;
-            font-family: 'Courier New', monospace;
-            font-size: clamp(4px, 1vw, 8px);
-            line-height: 1;
-            white-space: pre;
+            padding: 16px;
             overflow: auto;
             max-height: 70vh;
-            background: #010409;
+            background: #181818;
+        }
+
+        .ascii-output pre {
+            font-family: 'Courier New', monospace;
+            font-size: 7px;
+            line-height: 1.2;
+            white-space: pre;
+            margin: 0;
             color: #f0f6fc;
-            word-break: break-all;
-            user-select: all;
-        }
-
-        .loading {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 40px;
-            color: #7d8590;
-        }
-
-        .spinner {
-            width: 20px;
-            height: 20px;
-            border: 2px solid #30363d;
-            border-top: 2px solid #58a6ff;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin-right: 10px;
-        }
-
-        @keyframes spin {
-            0% {
-                transform: rotate(0deg);
-            }
-
-            100% {
-                transform: rotate(360deg);
-            }
         }
 
         .error {
             color: #f85149;
-            background: #0d1117;
             border: 1px solid #f85149;
             border-radius: 6px;
             padding: 16px;
-            margin-top: 16px;
+            margin: 16px;
+            font-size: 14px;
         }
 
         @media (max-width: 768px) {
             body {
-                padding: 15px;
+                padding: 12px;
             }
 
             .settings {
                 grid-template-columns: 1fr;
-            }
-
-            .ascii-output {
-                font-size: clamp(2px, 2vw, 6px);
-                padding: 10px;
-            }
-
-            .output-header {
-                padding: 10px 15px;
-            }
-        }
-
-        @media (max-width: 480px) {
-            .ascii-output {
-                font-size: clamp(1px, 2.5vw, 4px);
             }
         }
     </style>
@@ -301,189 +324,334 @@
 
 <body>
     <div class="container">
-        <h1>ASCII Image Processor</h1>
+        <h1>ascii-maker</h1>
+        <p class="tagline">Every 10&times;20 block is matched against every glyph and colour pair.</p>
 
         <div class="controls">
-            <div class="file-input-wrapper">
-                <input type="file" id="fileInput" class="file-input" accept="image/*">
-                <label for="fileInput" class="file-label" id="fileLabel">
-                    Click to select an image or drag & drop
-                </label>
-            </div>
+            <input type="file" id="fileInput" class="file-input" accept="image/*">
+            <label for="fileInput" class="file-label" id="fileLabel">
+                Click to select an image or drag &amp; drop
+            </label>
 
             <div class="settings">
-                <div class="setting-group">
+                <section class="card">
+                    <h2>Output</h2>
                     <label for="colsSlider">Columns</label>
                     <div class="slider-container">
-                        <input type="range" id="colsSlider" class="slider" min="40" max="200" value="80">
-                        <span class="slider-value" id="colsValue">80</span>
+                        <input type="range" id="colsSlider" class="slider" min="20" max="300" value="100">
+                        <span class="slider-value" id="colsValue">100</span>
                     </div>
-                </div>
+                    <label for="sizeSlider">Display size</label>
+                    <div class="slider-container">
+                        <input type="range" id="sizeSlider" class="slider" min="3" max="20" value="7">
+                        <span class="slider-value" id="sizeValue">7px</span>
+                    </div>
+                </section>
 
-                <div class="setting-group">
-                    <label>Invert Colors</label>
-                    <div class="toggle-container">
-                        <div class="toggle" id="invertToggle">
-                            <div class="toggle-thumb"></div>
-                        </div>
-                        <span id="invertLabel">Off</span>
+                <section class="card">
+                    <h2>Base layer</h2>
+                    <label for="baseColor">Colours</label>
+                    <select id="baseColor">
+                        <option value="mono">Monochrome</option>
+                        <option value="gray">Grayscale</option>
+                        <option value="color" selected>Full 16 colours</option>
+                    </select>
+                    <div class="checks">
+                        <label class="check"><input type="checkbox" id="baseBackground"> Colour the background
+                            too</label>
+                        <label class="check"><input type="checkbox" id="baseInvert"> Invert colours</label>
+                        <label class="check"><input type="checkbox" id="baseInvertLightness"> Invert lightness
+                            <span class="hint">(keeps hue)</span></label>
+                        <label class="check"><input type="checkbox" id="baseEdge"> Match on edges</label>
                     </div>
-                </div>
+                    <div class="sub disabled" id="baseEdgeSub">
+                        <label for="baseEdgeGain">Edge gain</label>
+                        <div class="slider-container">
+                            <input type="range" id="baseEdgeGain" class="slider" min="0.2" max="4" step="0.1"
+                                value="1.5">
+                            <span class="slider-value" id="baseEdgeGainValue">1.5</span>
+                        </div>
+                    </div>
+                </section>
+
+                <section class="card">
+                    <h2>Edge overlay</h2>
+                    <label class="check"><input type="checkbox" id="overlayOn"> Draw an edge layer on top</label>
+                    <span class="hint">A second pass, always matched on edges. Wherever it produces a space, the
+                        base layer shows through.</span>
+                    <div class="sub disabled" id="overlaySub">
+                        <label for="overlayColor">Colours</label>
+                        <select id="overlayColor">
+                            <option value="mono" selected>Monochrome</option>
+                            <option value="gray">Grayscale</option>
+                            <option value="color">Full 16 colours</option>
+                        </select>
+                        <div class="checks">
+                            <label class="check"><input type="checkbox" id="overlayInvert"> Invert colours</label>
+                            <label class="check"><input type="checkbox" id="overlayInvertLightness"> Invert
+                                lightness</label>
+                        </div>
+                        <label for="overlayEdgeGain">Edge gain</label>
+                        <div class="slider-container">
+                            <input type="range" id="overlayEdgeGain" class="slider" min="0.2" max="4" step="0.1"
+                                value="1.5">
+                            <span class="slider-value" id="overlayEdgeGainValue">1.5</span>
+                        </div>
+                        <label for="overlayBackground">Background comes from</label>
+                        <select id="overlayBackground">
+                            <option value="own" selected>The overlay (black)</option>
+                            <option value="base">The layer below</option>
+                        </select>
+                    </div>
+                </section>
             </div>
 
-            <button id="processBtn" class="process-btn" disabled>Select an image to process</button>
+            <button id="processBtn" class="btn process-btn" disabled>Select an image to convert</button>
         </div>
 
         <div class="output-container">
             <div class="output-header">
-                <span class="output-title">ASCII Output</span>
-                <span class="progress-info" id="progressInfo">Ready to process</span>
-            </div>
-            <div class="ascii-output" id="output">
-                <div class="loading" style="display: none;" id="loadingIndicator">
-                    <div class="spinner"></div>
-                    Processing image...
+                <span class="progress-info" id="progressInfo">Ready</span>
+                <div class="output-actions">
+                    <button class="btn" id="copyText" disabled>Copy text</button>
+                    <button class="btn" id="copyAnsi" disabled>Copy ANSI</button>
+                    <button class="btn" id="copyHtml" disabled>Copy HTML</button>
                 </div>
+            </div>
+            <div class="ascii-output" id="outputWrap">
+                <pre id="output"></pre>
             </div>
         </div>
     </div>
 
     <script>
         const worker = new Worker('./worker.js', { type: 'module' });
-        const fileInput = document.getElementById('fileInput');
-        const fileLabel = document.getElementById('fileLabel');
-        const processBtn = document.getElementById('processBtn');
-        const colsSlider = document.getElementById('colsSlider');
-        const colsValue = document.getElementById('colsValue');
-        const invertToggle = document.getElementById('invertToggle');
-        const invertLabel = document.getElementById('invertLabel');
-        const output = document.getElementById('output');
-        const progressInfo = document.getElementById('progressInfo');
-        const loadingIndicator = document.getElementById('loadingIndicator');
+
+        const el = (id) => document.getElementById(id);
+        const fileInput = el('fileInput');
+        const fileLabel = el('fileLabel');
+        const processBtn = el('processBtn');
+        const colsSlider = el('colsSlider');
+        const sizeSlider = el('sizeSlider');
+        const output = el('output');
+        const outputWrap = el('outputWrap');
+        const progressInfo = el('progressInfo');
+
+        // Filled in by the worker once wasm is up; falls back to the values the
+        // stamps were rendered against.
+        let palette = [
+            '#181818', '#b13c3d', '#78b13c', '#b1943c', '#3c48b1', '#963cb1', '#42a89c', '#cfcfcf',
+            '#4f4f4f', '#ff5658', '#adff56', '#ffd556', '#5668ff', '#d856ff', '#64ffef', '#ffffff',
+        ];
 
         let imageData = null;
-        let isProcessing = false;
-        let currentOutput = '';
+        let imageName = '';
+        let busy = false;
+        let rowHtml = [];
+        let result = null;
 
-        // File input handling
-        fileInput.addEventListener('change', async (e) => {
-            const file = e.target.files[0];
-            if (file && !isProcessing) {
-                try {
-                    const arrayBuffer = await file.arrayBuffer();
-                    imageData = new Uint8Array(arrayBuffer);
-                    fileLabel.textContent = `Selected: ${file.name}`;
-                    fileLabel.classList.add('has-file');
-                    processBtn.disabled = false;
-                    processBtn.textContent = `Process ${file.name}`;
-                    progressInfo.textContent = 'Ready to process';
-                } catch (error) {
-                    showError('Failed to read file: ' + error.message);
-                }
-            } else if (isProcessing) {
-                // Reset file input if processing
-                fileInput.value = '';
+        // --- input -----------------------------------------------------------
+
+        async function loadFile(file) {
+            if (!file || busy) return;
+            try {
+                imageData = new Uint8Array(await file.arrayBuffer());
+                imageName = file.name;
+                fileLabel.textContent = `Selected: ${file.name}`;
+                fileLabel.classList.add('has-file');
+                processBtn.disabled = false;
+                processBtn.textContent = `Convert ${file.name}`;
+                progressInfo.textContent = 'Ready';
+            } catch (error) {
+                showError('Failed to read file: ' + error.message);
             }
-        });
-
-        // Drag and drop
-        fileLabel.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            if (!isProcessing) {
-                fileLabel.style.borderColor = '#58a6ff';
-            }
-        });
-
-        fileLabel.addEventListener('dragleave', (e) => {
-            e.preventDefault();
-            fileLabel.style.borderColor = '#30363d';
-        });
-
-        fileLabel.addEventListener('drop', (e) => {
-            e.preventDefault();
-            fileLabel.style.borderColor = '#30363d';
-            if (!isProcessing && e.dataTransfer.files.length > 0) {
-                fileInput.files = e.dataTransfer.files;
-                fileInput.dispatchEvent(new Event('change'));
-            }
-        });
-
-        // Controls
-        colsSlider.addEventListener('input', () => {
-            colsValue.textContent = colsSlider.value;
-        });
-
-        invertToggle.addEventListener('click', () => {
-            invertToggle.classList.toggle('active');
-            invertLabel.textContent = invertToggle.classList.contains('active') ? 'On' : 'Off';
-        });
-
-        // Process button
-        processBtn.addEventListener('click', () => {
-            if (imageData && !isProcessing) {
-                startProcessing();
-                const cols = parseInt(colsSlider.value);
-                const invert = invertToggle.classList.contains('active');
-                worker.postMessage({ data: imageData, cols, invert });
-            }
-        });
-
-        function startProcessing() {
-            isProcessing = true;
-            currentOutput = '';
-            output.innerHTML = '';
-            loadingIndicator.style.display = 'flex';
-            processBtn.disabled = true;
-            processBtn.textContent = 'Processing...';
-            fileInput.disabled = true;
-            progressInfo.textContent = 'Processing...';
         }
 
-        function finishProcessing() {
-            isProcessing = false;
-            loadingIndicator.style.display = 'none';
-            processBtn.disabled = false;
-            processBtn.textContent = imageData ? `Process ${fileLabel.textContent.replace('Selected: ', '')}` : 'Select an image to process';
+        fileInput.addEventListener('change', (e) => loadFile(e.target.files[0]));
+
+        fileLabel.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            if (!busy) fileLabel.style.borderColor = '#58a6ff';
+        });
+        fileLabel.addEventListener('dragleave', () => {
+            fileLabel.style.borderColor = '';
+        });
+        fileLabel.addEventListener('drop', (e) => {
+            e.preventDefault();
+            fileLabel.style.borderColor = '';
+            loadFile(e.dataTransfer.files[0]);
+        });
+        fileInput.addEventListener('click', (e) => {
+            if (busy) e.preventDefault();
+        });
+
+        // --- controls --------------------------------------------------------
+
+        colsSlider.addEventListener('input', () => {
+            el('colsValue').textContent = colsSlider.value;
+        });
+        sizeSlider.addEventListener('input', () => {
+            el('sizeValue').textContent = sizeSlider.value + 'px';
+            output.style.fontSize = sizeSlider.value + 'px';
+        });
+        for (const id of ['baseEdgeGain', 'overlayEdgeGain']) {
+            el(id).addEventListener('input', () => {
+                el(id + 'Value').textContent = Number(el(id).value).toFixed(1);
+            });
+        }
+
+        // Each layer's extra settings only matter once that layer is switched on.
+        for (const [toggle, section] of [['baseEdge', 'baseEdgeSub'], ['overlayOn', 'overlaySub']]) {
+            el(toggle).addEventListener('change', () => {
+                el(section).classList.toggle('disabled', !el(toggle).checked);
+            });
+        }
+
+        /** Read one layer's controls, which all share an id prefix. */
+        function readLayer(prefix) {
+            return {
+                color: el(prefix + 'Color').value,
+                invert: el(prefix + 'Invert').checked,
+                invertLightness: el(prefix + 'InvertLightness').checked,
+                edgeGain: parseFloat(el(prefix + 'EdgeGain').value),
+            };
+        }
+
+        processBtn.addEventListener('click', () => {
+            if (!imageData || busy) return;
+            startRun();
+            worker.postMessage({
+                data: imageData,
+                options: {
+                    cols: parseInt(colsSlider.value, 10),
+                    base: {
+                        ...readLayer('base'),
+                        background: el('baseBackground').checked,
+                        edge: el('baseEdge').checked,
+                    },
+                    // The overlay's edge matching and lack of background are
+                    // fixed on the Rust side; these are the settings that vary.
+                    overlay: el('overlayOn').checked ? readLayer('overlay') : null,
+                    overlayBackground: el('overlayBackground').value,
+                },
+            });
+        });
+
+        // --- rendering -------------------------------------------------------
+
+        const escapeMap = { '&': '&amp;', '<': '&lt;', '>': '&gt;' };
+
+        /** Build one row of markup from `char, fg, bg` triples, merging runs. */
+        function renderRow(triples) {
+            let html = '';
+            let run = null;
+            let text = '';
+            for (let i = 0; i < triples.length; i += 3) {
+                const ch = String.fromCharCode(triples[i]);
+                const key = triples[i + 1] * 16 + triples[i + 2];
+                if (key !== run) {
+                    if (run !== null) html += escapeHtml(text) + '</span>';
+                    html += `<span style="color:${palette[triples[i + 1]]};background:${palette[triples[i + 2]]}">`;
+                    run = key;
+                    text = '';
+                }
+                text += ch;
+            }
+            if (run !== null) html += escapeHtml(text) + '</span>';
+            return html;
+        }
+
+        function escapeHtml(s) {
+            return s.replace(/[&<>]/g, (c) => escapeMap[c]);
+        }
+
+        function startRun() {
+            busy = true;
+            rowHtml = [];
+            result = null;
+            output.innerHTML = '';
+            clearError();
+            processBtn.disabled = true;
+            processBtn.textContent = 'Converting...';
+            fileInput.disabled = true;
+            for (const id of ['copyText', 'copyAnsi', 'copyHtml']) el(id).disabled = true;
+            progressInfo.textContent = 'Converting...';
+        }
+
+        function finishRun(message) {
+            busy = false;
+            processBtn.disabled = !imageData;
+            processBtn.textContent = imageData ? `Convert ${imageName}` : 'Select an image to convert';
             fileInput.disabled = false;
-            progressInfo.textContent = 'Complete';
+            progressInfo.textContent = message;
         }
 
         function showError(message) {
-            output.innerHTML = `<div class="error">Error: ${message}</div>`;
-            finishProcessing();
+            clearError();
+            const box = document.createElement('div');
+            box.className = 'error';
+            box.id = 'errorBox';
+            box.textContent = 'Error: ' + message;
+            outputWrap.parentNode.appendChild(box);
+            finishRun('Failed');
         }
 
-        // Worker message handling
+        function clearError() {
+            const box = el('errorBox');
+            if (box) box.remove();
+        }
+
         worker.onmessage = (e) => {
-            const { type, data, result, error, progress } = e.data;
+            const msg = e.data;
+            switch (msg.type) {
+                case 'palette':
+                    palette = msg.palette;
+                    break;
 
-            if (type === 'stream') {
-                // Accumulate characters and update display
-                currentOutput += data;
-                output.textContent = currentOutput;
-                output.scrollTop = output.scrollHeight;
+                case 'row':
+                    rowHtml.push(renderRow(msg.triples));
+                    // Repainting every row gets expensive on tall output; a
+                    // batch every 8 rows still looks continuous.
+                    if (msg.row % 8 === 0 || msg.row + 1 >= msg.total) {
+                        output.innerHTML = rowHtml.join('\n');
+                        progressInfo.textContent =
+                            `Converting... ${Math.round(((msg.row + 1) / msg.total) * 100)}%`;
+                    }
+                    break;
 
-                if (progress) {
-                    progressInfo.textContent = `Processing... ${progress}%`;
-                }
-            } else if (type === 'done') {
-                finishProcessing();
-            } else if (type === 'error') {
-                showError(error);
+                case 'done':
+                    output.innerHTML = rowHtml.join('\n');
+                    result = msg;
+                    for (const id of ['copyText', 'copyAnsi', 'copyHtml']) el(id).disabled = false;
+                    finishRun(`${msg.cols} x ${msg.rows} characters`);
+                    break;
+
+                case 'error':
+                    showError(msg.error);
+                    break;
             }
         };
 
-        worker.onerror = (error) => {
-            console.error('Worker error:', error);
-            showError('Worker error: ' + error.message);
-        };
+        worker.onerror = (error) => showError(error.message || 'worker failed to start');
 
-        // Prevent file selection during processing
-        fileInput.addEventListener('click', (e) => {
-            if (isProcessing) {
-                e.preventDefault();
+        // --- copy ------------------------------------------------------------
+
+        async function copy(button, text) {
+            const label = button.textContent;
+            try {
+                await navigator.clipboard.writeText(text);
+                button.textContent = 'Copied';
+            } catch {
+                button.textContent = 'Copy failed';
             }
-        });
+            setTimeout(() => { button.textContent = label; }, 1200);
+        }
+
+        el('copyText').addEventListener('click', (e) => copy(e.target, result.text));
+        el('copyAnsi').addEventListener('click', (e) => copy(e.target, result.ansi));
+        el('copyHtml').addEventListener('click', (e) => copy(e.target, output.innerHTML));
+
+        output.style.fontSize = sizeSlider.value + 'px';
     </script>
 </body>
 

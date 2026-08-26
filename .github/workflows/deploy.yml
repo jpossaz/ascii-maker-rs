@@ -48,6 +48,12 @@ jobs:
           curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
         fi
 
+    - name: Test
+      run: cargo test --release
+
+    - name: Build the CLI
+      run: cargo build --release --bin asciimaker
+
     - name: Build with wasm-pack
       run: wasm-pack build --target web --out-dir test/out
 

@@ -1,30 +1,41 @@
-// worker.js
-import init, { process_image } from './out/ascii_worker.js';
+// Runs the wasm converter off the main thread and streams finished rows back.
+import init, { convert_image, palette_hex } from './out/ascii_maker.js';
 
-let initialized = false;
+let ready = null;
 
-self.onmessage = async function (e) {
+async function ensureReady() {
+    if (!ready) {
+        ready = init().then(() => {
+            self.postMessage({ type: 'palette', palette: palette_hex() });
+        });
+    }
+    return ready;
+}
+
+self.onmessage = async (e) => {
+    const opts = e.data;
     try {
-        if (!initialized) {
-            await init();
-            initialized = true;
-            console.log('WASM initialized');
-        }
+        await ensureReady();
 
-        const callback = (data) => {
-            self.postMessage({ type: 'stream', data });
+        const onRow = (row, triples, total) => {
+            self.postMessage({ type: 'row', row, total, triples }, [triples.buffer]);
         };
 
-        console.log('Processing image, data length:', e.data.length);
-        const result = process_image(e.data.data, e.data.cols, e.data.invert, callback);
-        self.postMessage({ type: 'done', result });
+        const art = convert_image(opts.data, opts.options, onRow);
 
+        self.postMessage({
+            type: 'done',
+            cols: art.cols,
+            rows: art.rows,
+            text: art.text(),
+            ansi: art.ansi(false),
+        });
+        art.free();
     } catch (error) {
-        console.error('Worker error:', error);
-        self.postMessage({ type: 'error', error: error.message });
+        self.postMessage({ type: 'error', error: String(error.message || error) });
     }
 };
 
 self.onerror = (error) => {
-    console.error('Worker script error:', error);
+    self.postMessage({ type: 'error', error: String(error.message || error) });
 };

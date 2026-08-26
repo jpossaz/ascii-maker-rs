@@ -1,57 +1,90 @@
-use std::io::{self, Cursor};
+//! Glyph coverage masks and the per-glyph constants the solver needs.
+//!
+//! The original C tool shipped every glyph pre-rendered at all 256
+//! (background, foreground) palette pairs: 14.6 MB of stamps. Each of those
+//! pixels is exactly `bg + alpha * (fg - bg)`, so all that is really needed is
+//! one 10x20 coverage mask per glyph - 19 KB for the whole set. `tools/gen_alpha.py`
+//! derives `alpha.bin` from the legacy blob and checks the blend model holds.
 
-use lazy_static::lazy_static;
+use std::sync::OnceLock;
 
-const STAMP_DATA_BROTLI: &[u8] = include_bytes!("stamps.bin.br");
-
-fn decompress_brotli(compressed_data: &[u8]) -> Result<Vec<u8>, io::Error> {
-    let mut input = Cursor::new(compressed_data);
-    let mut output = Vec::new();
-
-    brotli::BrotliDecompress(&mut input, &mut output)?;
-    Ok(output)
-}
-
-lazy_static! {
-    static ref STAMP_DATA: Vec<u8> =
-        decompress_brotli(STAMP_DATA_BROTLI).expect("Failed to decompress stamp data");
-}
-
-pub struct Color<'a> {
-    pub r: &'a u8,
-    pub g: &'a u8,
-    pub b: &'a u8,
-}
+use crate::edge;
 
 pub const CELL_W: usize = 10;
 pub const CELL_H: usize = 20;
+pub const CELL_PX: usize = CELL_W * CELL_H;
+/// Printable ASCII, space (0x20) through '~' (0x7e).
+pub const NCHARS: usize = 95;
+/// Codepoint of glyph 0.
+pub const FIRST_CHAR: u8 = 32;
 
-pub fn access_data(char_id: u8, bg_id: u8, fg_id: u8, y: u8, x: u8) -> Option<Color<'static>> {
-    const COLUMN_SELECTOR: usize = 3;
-    const ROW_SELECTOR: usize = COLUMN_SELECTOR * CELL_W;
-    const FG_SELECTOR: usize = ROW_SELECTOR * CELL_H;
-    const BG_SELECTOR: usize = FG_SELECTOR * 16;
-    const CHAR_SELECTOR: usize = BG_SELECTOR * 16;
+const ALPHA_RAW: &[u8] = include_bytes!("alpha.bin");
 
-    // Bounds checking
-    if char_id >= 95 || bg_id >= 16 || fg_id >= 16 || y >= 20 || x >= 10 {
-        return None;
+pub struct Stamps {
+    /// Coverage per glyph pixel, 0.0-1.0, `NCHARS * CELL_PX`.
+    pub alpha: Vec<f32>,
+    /// Sum of alpha over each glyph.
+    pub sum_a: [f32; NCHARS],
+    /// Sum of alpha squared over each glyph.
+    pub sum_a2: [f32; NCHARS],
+    /// Sobel magnitude of each coverage mask, normalised to 0.0-1.0.
+    pub edges: Vec<f32>,
+}
+
+pub fn stamps() -> &'static Stamps {
+    static STAMPS: OnceLock<Stamps> = OnceLock::new();
+    STAMPS.get_or_init(build)
+}
+
+fn build() -> Stamps {
+    assert_eq!(
+        ALPHA_RAW.len(),
+        NCHARS * CELL_PX,
+        "alpha.bin has the wrong size"
+    );
+
+    let alpha: Vec<f32> = ALPHA_RAW.iter().map(|&v| v as f32 / 255.0).collect();
+
+    let mut sum_a = [0.0f32; NCHARS];
+    let mut sum_a2 = [0.0f32; NCHARS];
+    for c in 0..NCHARS {
+        let cell = &alpha[c * CELL_PX..(c + 1) * CELL_PX];
+        sum_a[c] = cell.iter().sum();
+        sum_a2[c] = cell.iter().map(|a| a * a).sum();
     }
 
-    let index = char_id as usize * CHAR_SELECTOR
-        + bg_id as usize * BG_SELECTOR
-        + fg_id as usize * FG_SELECTOR
-        + y as usize * ROW_SELECTOR
-        + x as usize * COLUMN_SELECTOR;
-
-    // Additional bounds check for the array access
-    if index + 2 >= STAMP_DATA.len() {
-        return None;
+    // Edge stamps: Sobel each mask on its own, then normalise the whole set by
+    // its strongest response so glyph and image edge maps share a scale.
+    let mut edges = vec![0.0f32; NCHARS * CELL_PX];
+    for c in 0..NCHARS {
+        edge::sobel(
+            &alpha[c * CELL_PX..(c + 1) * CELL_PX],
+            CELL_W,
+            CELL_H,
+            &mut edges[c * CELL_PX..(c + 1) * CELL_PX],
+        );
+    }
+    let peak = edges.iter().copied().fold(0.0f32, f32::max);
+    if peak > 0.0 {
+        for e in &mut edges {
+            *e /= peak;
+        }
     }
 
-    Some(Color {
-        r: &STAMP_DATA[index],
-        g: &STAMP_DATA[index + 1],
-        b: &STAMP_DATA[index + 2],
-    })
+    Stamps {
+        alpha,
+        sum_a,
+        sum_a2,
+        edges,
+    }
+}
+
+impl Stamps {
+    pub fn alpha_of(&self, char_id: usize) -> &[f32] {
+        &self.alpha[char_id * CELL_PX..(char_id + 1) * CELL_PX]
+    }
+
+    pub fn edge_of(&self, char_id: usize) -> &[f32] {
+        &self.edges[char_id * CELL_PX..(char_id + 1) * CELL_PX]
+    }
 }
