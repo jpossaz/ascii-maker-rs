@@ -29,6 +29,8 @@ use crate::edge;
 use crate::palette::{ColorMode, palette_f32};
 use crate::stamps::{CELL_H, CELL_PX, CELL_W, FIRST_CHAR, NCHARS, Stamps, stamps};
 
+use std::sync::Arc;
+
 use image::{DynamicImage, imageops::FilterType};
 
 /// Settings for a single matching pass.
@@ -89,6 +91,8 @@ pub struct Options {
     pub overlay: Option<Layer>,
     /// Which layer supplies the background of a composited cell.
     pub overlay_background: OverlayBackground,
+    /// Glyph set to match against. `None` uses the built-in one.
+    pub glyphs: Option<Arc<Stamps>>,
 }
 
 /// One output character: a glyph plus its two palette indices.
@@ -184,8 +188,12 @@ struct Pipeline<'a> {
 }
 
 impl<'a> Pipeline<'a> {
-    fn new(img: &DynamicImage, opts: &Options) -> Pipeline<'a> {
+    fn new(img: &DynamicImage, opts: &'a Options) -> Pipeline<'a> {
         let (cols, rows) = output_size(img, opts);
+        let glyphs: &'a Stamps = match opts.glyphs.as_deref() {
+            Some(g) => g,
+            None => stamps(),
+        };
         let width = cols * CELL_W;
 
         // One resize feeds both layers; each then takes its own inverted copy,
@@ -194,10 +202,10 @@ impl<'a> Pipeline<'a> {
         let overlay = opts.overlay.as_ref().map(|layer| {
             let mut p = plane.clone();
             apply_inversion(&mut p, layer);
-            Solver::new(p, width, rows, layer)
+            Solver::new(glyphs, p, width, rows, layer)
         });
         apply_inversion(&mut plane, &opts.base);
-        let base = Solver::new(plane, width, rows, &opts.base);
+        let base = Solver::new(glyphs, plane, width, rows, &opts.base);
 
         Pipeline {
             base,
@@ -301,8 +309,13 @@ struct Solver<'a> {
 }
 
 impl<'a> Solver<'a> {
-    fn new(plane: Vec<f32>, width: usize, rows: usize, layer: &Layer) -> Solver<'a> {
-        let stamps = stamps();
+    fn new(
+        stamps: &'a Stamps,
+        plane: Vec<f32>,
+        width: usize,
+        rows: usize,
+        layer: &Layer,
+    ) -> Solver<'a> {
         let palette = palette_f32();
 
         let edges = layer
@@ -628,6 +641,7 @@ mod tests {
             let (cols, rows) = output_size(&img, &opts);
             assert!(rows > 0 && cols > 0);
             let solver = Solver::new(
+                stamps(),
                 resize_plane(&img, cols * CELL_W, rows * CELL_H),
                 cols * CELL_W,
                 rows,
@@ -705,6 +719,7 @@ mod tests {
 
         // Whatever glyph it lands on, its edge stamp must be the closest one.
         let solver = Solver::new(
+            stamps(),
             resize_plane(&img, CELL_W, CELL_H),
             CELL_W,
             1,

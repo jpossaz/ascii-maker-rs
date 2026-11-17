@@ -46,7 +46,10 @@ cargo build --release
 | `--invert-lightness` | Flip the image's lightness, keeping hue and saturation |
 | `-e, --edge` | Match edge maps instead of raw pixels |
 | `--edge-gain GAIN` | Scale the image's edge map; above 1.0 draws faint edges as solid strokes |
-| `-f, --format FMT` | `auto`, `ansi`, `text`, or `html` |
+| `-f, --format FMT` | `auto`, `ansi`, `text`, `html`, or `png` |
+| `--font FILE` | Match and draw with a TTF/OTF font instead of the built-in glyphs |
+| `--theme NAME` | Colour theme for PNG output (`xterm`, `gruvbox-dark`, `green-phosphor`, ...) |
+| `--cell-height PX` | Cell height in PNG output; cells are half as wide (default 20) |
 
 Everything above configures the base layer. `--overlay` adds a second one, with
 its own copies of the same settings: `--overlay-color`, `--overlay-invert`,
@@ -108,6 +111,38 @@ glyphs always stand out against black. `--overlay-background base` keeps the
 background the layer below chose instead, so the edges are drawn onto the colour
 field rather than punched through it - at the cost of the occasional glyph
 vanishing where its foreground matches what is behind it.
+
+## Images, themes and fonts
+
+`--format png -o art.png` draws the result the way a terminal would: each cell
+is its glyph's coverage mask blended between the two colours, exactly the
+model the solver scored. `--theme` decides what the 16 palette slots look like
+on screen. As in a real terminal, a theme also has its own default background
+and foreground, which replace slot 0 behind cells and slot 7 for glyphs. The
+single-hue themes (`green-phosphor`, `amber-phosphor`, `paper`, ...) turn every
+slot into one ink at that slot's brightness. Light themes want
+`--invert-lightness` or `--invert`, so the dark parts of the picture come out
+as dark ink.
+
+`--font` swaps the glyph set. The font is rasterised into the 10x20 cell and
+the solver matches against *those* masks, so the characters it picks are the
+ones that look right in that font, not in the built-in one. Any font works,
+monospace or not: every glyph is scaled by one shared factor, sits on one
+baseline, and is centred on its own advance; a font too wide for the cell is
+squeezed horizontally (up to 1.6x) before it shrinks. Characters the font
+lacks are blank. Fonts whose glyphs all have about the same coverage (dotted
+or redacted display faces) give the solver nothing to choose between and come
+out as noise.
+
+```
+asciimaker -i image.png -w 120 --color --background \
+           --overlay --overlay-color gray --overlay-edge-gain 1.5 \
+           --font UnifrakturCook-Bold.ttf --theme gruvbox-dark \
+           --cell-height 32 -f png -o art.png
+```
+
+All of this sits behind the default `raster` cargo feature (it pulls in
+`fontdue`); `cargo build --no-default-features` leaves it out.
 
 ## Stamps
 

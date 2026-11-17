@@ -31,19 +31,41 @@ pub struct Stamps {
     pub edges: Vec<f32>,
 }
 
+/// The built-in glyph set, from `alpha.bin`.
 pub fn stamps() -> &'static Stamps {
     static STAMPS: OnceLock<Stamps> = OnceLock::new();
-    STAMPS.get_or_init(build)
+    STAMPS.get_or_init(|| {
+        assert_eq!(
+            ALPHA_RAW.len(),
+            NCHARS * CELL_PX,
+            "alpha.bin has the wrong size"
+        );
+        Stamps::from_alpha(ALPHA_RAW.iter().map(|&v| v as f32 / 255.0).collect())
+    })
 }
 
-fn build() -> Stamps {
-    assert_eq!(
-        ALPHA_RAW.len(),
-        NCHARS * CELL_PX,
-        "alpha.bin has the wrong size"
-    );
+/// The built-in masks as raw bytes, `NCHARS` glyphs of `CELL_W x CELL_H`.
+pub fn builtin_alpha() -> &'static [u8] {
+    ALPHA_RAW
+}
 
-    let alpha: Vec<f32> = ALPHA_RAW.iter().map(|&v| v as f32 / 255.0).collect();
+impl std::fmt::Debug for Stamps {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Stamps").finish_non_exhaustive()
+    }
+}
+
+impl Stamps {
+    /// Build a glyph set from `NCHARS` coverage masks of `CELL_W x CELL_H`,
+    /// 0.0-1.0, in codepoint order starting at space. Any font can be matched
+    /// against once it is reduced to this.
+    pub fn from_alpha(alpha: Vec<f32>) -> Stamps {
+        assert_eq!(alpha.len(), NCHARS * CELL_PX, "need one mask per glyph");
+        build(alpha)
+    }
+}
+
+fn build(alpha: Vec<f32>) -> Stamps {
 
     let mut sum_a = [0.0f32; NCHARS];
     let mut sum_a2 = [0.0f32; NCHARS];

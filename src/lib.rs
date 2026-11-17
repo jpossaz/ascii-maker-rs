@@ -7,6 +7,8 @@
 pub mod convert;
 pub mod edge;
 pub mod palette;
+#[cfg(feature = "raster")]
+pub mod raster;
 pub mod render;
 pub mod stamps;
 

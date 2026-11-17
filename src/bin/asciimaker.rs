@@ -95,6 +95,25 @@ struct Args {
     /// Output format
     #[arg(short, long, value_enum, default_value_t = Format::Auto)]
     format: Format,
+
+    /// Match and draw with this TTF/OTF font instead of the built-in glyphs.
+    /// Any font works; each glyph is fitted into the terminal cell
+    #[cfg(feature = "raster")]
+    #[arg(long, value_name = "FILE")]
+    font: Option<PathBuf>,
+
+    /// Colour theme for PNG output: how the 16 palette slots, the default
+    /// background and the default foreground look on screen
+    #[cfg(feature = "raster")]
+    #[arg(long, value_name = "NAME", default_value = "tool",
+          value_parser = clap::builder::PossibleValuesParser::new(ascii_maker::raster::Theme::names()))]
+    theme: String,
+
+    /// Height in pixels of one character cell in PNG output; cells are half
+    /// as wide. The built-in glyphs are drawn at 20
+    #[cfg(feature = "raster")]
+    #[arg(long, value_name = "PX", default_value_t = 20)]
+    cell_height: usize,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, ValueEnum)]
@@ -144,6 +163,9 @@ enum Format {
     Text,
     /// A standalone HTML page
     Html,
+    /// A PNG image of the art as a terminal would draw it (needs --output)
+    #[cfg(feature = "raster")]
+    Png,
 }
 
 fn main() -> ExitCode {
@@ -188,6 +210,28 @@ fn run(args: &Args) -> anyhow::Result<()> {
             edge_gain: args.overlay_edge_gain,
         }),
         overlay_background: args.overlay_background.into(),
+        glyphs: None,
+    };
+
+    #[cfg(feature = "raster")]
+    let font_glyphs = match &args.font {
+        Some(path) => {
+            let data =
+                std::fs::read(path).map_err(|e| anyhow::anyhow!("{}: {e}", path.display()))?;
+            let at = |w, h| {
+                ascii_maker::raster::Glyphs::from_font(&data, w, h)
+                    .map_err(|e| anyhow::anyhow!("{}: {e}", path.display()))
+            };
+            Some((at(10, 20)?, at(args.cell_height / 2, args.cell_height)?))
+        }
+        None => None,
+    };
+    #[cfg(feature = "raster")]
+    let opts = Options {
+        glyphs: font_glyphs
+            .as_ref()
+            .map(|(m, _)| std::sync::Arc::new(m.stamps())),
+        ..opts
     };
 
     let art = convert(&img, &opts);
@@ -206,6 +250,24 @@ fn run(args: &Args) -> anyhow::Result<()> {
         Format::Ansi => render::to_ansi(&art, args.defaults),
         Format::Text => render::to_plain(&art),
         Format::Html => html_page(&render::to_html(&art)),
+        #[cfg(feature = "raster")]
+        Format::Png => {
+            use ascii_maker::raster::{Glyphs, Theme, to_image};
+            let path = args
+                .output
+                .as_ref()
+                .ok_or_else(|| anyhow::anyhow!("--format png needs --output"))?;
+            if args.cell_height < 2 {
+                anyhow::bail!("--cell-height must be at least 2");
+            }
+            let glyphs = match &font_glyphs {
+                Some((_, draw)) => draw.clone(),
+                None => Glyphs::builtin(args.cell_height / 2, args.cell_height),
+            };
+            let theme = Theme::by_name(&args.theme).expect("clap checked the name");
+            to_image(&art, &glyphs, &theme).save(path)?;
+            return Ok(());
+        }
         Format::Auto => unreachable!("resolved above"),
     };
 

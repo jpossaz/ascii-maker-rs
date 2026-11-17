@@ -133,6 +133,7 @@ fn read_options(options: &JsValue) -> Result<Options, JsValue> {
         base,
         overlay,
         overlay_background,
+        glyphs: None,
     })
 }
 

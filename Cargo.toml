@@ -12,8 +12,16 @@ crate-type = ["cdylib", "rlib"]
 name = "asciimaker"
 path = "src/bin/asciimaker.rs"
 
+[features]
+default = ["raster"]
+# PNG output, terminal colour themes, and matching against any TTF/OTF font
+# (--format png, --theme, --font, --cell-height). Build with
+# --no-default-features to leave it out.
+raster = ["dep:fontdue"]
+
 [dependencies]
 image = "0.25.6"
+fontdue = { version = "0.9", optional = true }
 
 # The CLI frontend. wasm-pack builds only the library, so these never reach the
 # web build.
