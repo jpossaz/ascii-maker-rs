@@ -120,9 +120,16 @@ model the solver scored. `--theme` decides what the 16 palette slots look like
 on screen. As in a real terminal, a theme also has its own default background
 and foreground, which replace slot 0 behind cells and slot 7 for glyphs. The
 single-hue themes (`green-phosphor`, `amber-phosphor`, `paper`, ...) turn every
-slot into one ink at that slot's brightness. Light themes want
-`--invert-lightness` or `--invert`, so the dark parts of the picture come out
-as dark ink.
+slot into one ink at that slot's brightness.
+
+The match is scored against the theme's colours, so the art is the closest
+the theme can get to the picture: light themes need no inversion, a dark
+region simply picks whatever slot shows dark there. `--theme-recolor` scores
+against the tool's own palette instead and only *shows* the result in the
+theme, which shifts hues to whatever the theme keeps in each slot. One trap,
+true of real terminals too: on full-palette light themes (`solarized-light`,
+`one-light`) slot 15 is close to the background, so `--grayscale` or
+`--color` work there and plain mono barely shows.
 
 `--font` swaps the glyph set. The font is rasterised into the 10x20 cell and
 the solver matches against *those* masks, so the characters it picks are the

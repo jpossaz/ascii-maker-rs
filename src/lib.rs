@@ -13,7 +13,7 @@ pub mod render;
 pub mod stamps;
 
 pub use convert::{Art, Cell, Layer, Options, OverlayBackground, convert, convert_streaming};
-pub use palette::ColorMode;
+pub use palette::{ColorMode, Colors};
 
 #[cfg(target_arch = "wasm32")]
 mod wasm;

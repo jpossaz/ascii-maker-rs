@@ -33,6 +33,31 @@ pub fn palette_f32() -> [[f32; 3]; 16] {
     out
 }
 
+/// What each palette slot looks like on screen, as foreground and as
+/// background. They differ where a terminal theme gives slot 0 its own
+/// default background or slot 7 its own default foreground.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Colors {
+    pub fg: [[u8; 3]; 16],
+    pub bg: [[u8; 3]; 16],
+}
+
+impl Default for Colors {
+    fn default() -> Colors {
+        Colors { fg: PALETTE, bg: PALETTE }
+    }
+}
+
+impl Colors {
+    pub(crate) fn fg_f32(&self) -> [[f32; 3]; 16] {
+        self.fg.map(|c| c.map(|v| v as f32 / 255.0))
+    }
+
+    pub(crate) fn bg_f32(&self) -> [[f32; 3]; 16] {
+        self.bg.map(|c| c.map(|v| v as f32 / 255.0))
+    }
+}
+
 /// `#rrggbb` for palette entry `i`.
 pub fn hex(i: u8) -> String {
     let [r, g, b] = PALETTE[i as usize & 15];

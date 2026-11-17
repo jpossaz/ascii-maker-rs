@@ -6,7 +6,7 @@
 use image::{GrayImage, Luma, RgbImage, imageops::FilterType};
 
 use crate::convert::Art;
-use crate::palette::PALETTE;
+use crate::palette::{Colors, PALETTE};
 use crate::stamps::{CELL_H, CELL_W, FIRST_CHAR, NCHARS, Stamps, builtin_alpha};
 
 /// Coverage masks for every printable glyph at one cell size.
@@ -335,22 +335,15 @@ impl Theme {
             .map(|&(_, bg, ink, light)| Theme::single_hue(rgb(bg), rgb(ink), light))
     }
 
-    fn fg(&self, i: u8) -> [f32; 3] {
-        let c = if i == 7 {
-            self.foreground
-        } else {
-            self.palette[i as usize & 15]
-        };
-        c.map(|v| v as f32)
-    }
-
-    fn bg(&self, i: u8) -> [f32; 3] {
-        let c = if i == 0 {
-            self.background
-        } else {
-            self.palette[i as usize & 15]
-        };
-        c.map(|v| v as f32)
+    /// The slot colours as this theme shows them. Put these in
+    /// [`Options::colors`](crate::Options::colors) to have the match scored
+    /// against what will actually be on screen.
+    pub fn colors(&self) -> Colors {
+        let mut fg = self.palette;
+        let mut bg = self.palette;
+        fg[7] = self.foreground;
+        bg[0] = self.background;
+        Colors { fg, bg }
     }
 }
 
@@ -358,10 +351,12 @@ impl Theme {
 /// each pixel `bg + coverage * (fg - bg)`.
 pub fn to_image(art: &Art, glyphs: &Glyphs, theme: &Theme) -> RgbImage {
     let (cw, ch) = (glyphs.cell_w, glyphs.cell_h);
+    let colors = theme.colors();
     let mut img = RgbImage::new((art.cols * cw) as u32, (art.rows * ch) as u32);
     for row in 0..art.rows {
         for (col, cell) in art.row(row).iter().enumerate() {
-            let (f, b) = (theme.fg(cell.fg), theme.bg(cell.bg));
+            let f = colors.fg[cell.fg as usize & 15].map(|v| v as f32);
+            let b = colors.bg[cell.bg as usize & 15].map(|v| v as f32);
             let mask = glyphs.mask(cell.ch);
             for y in 0..ch {
                 for x in 0..cw {
@@ -380,6 +375,7 @@ pub fn to_image(art: &Art, glyphs: &Glyphs, theme: &Theme) -> RgbImage {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ColorMode;
     use crate::convert::{Cell, Options, convert};
     use crate::stamps::{CELL_PX, stamps};
     use image::{DynamicImage, RgbImage};
@@ -447,6 +443,53 @@ mod tests {
         let art = convert(&img, &opts);
         assert!(art.cells.iter().all(|c| c.ch == b' ' || c.ch == b'#'));
         assert!(art.cells.iter().any(|c| c.ch == b'#'));
+    }
+
+    #[test]
+    fn light_themes_draw_dark_ink_where_the_image_is_dark() {
+        // Matching against the theme's own colours: on a light theme a dark
+        // image region must come out dark, without any inversion flags. With
+        // no cell backgrounds the darkest a cell gets is its densest glyph,
+        // hence the modest margin.
+        let img = DynamicImage::ImageRgb8(RgbImage::from_fn(200, 200, |x, _| {
+            if x < 100 {
+                image::Rgb([10, 10, 10])
+            } else {
+                image::Rgb([250, 248, 240])
+            }
+        }));
+        // Mono on a full-palette light theme has no ink (slot 15 is the
+        // background colour there), so those get grayscale, which includes
+        // the theme's default foreground.
+        for (name, color) in [
+            ("paper", ColorMode::Mono),
+            ("solarized-light", ColorMode::Grayscale),
+            ("one-light", ColorMode::Grayscale),
+        ] {
+            let theme = Theme::by_name(name).unwrap();
+            let opts = Options {
+                colors: theme.colors(),
+                base: crate::Layer {
+                    color,
+                    ..Default::default()
+                },
+                ..Options::default()
+            };
+            let art = convert(&img, &opts);
+            let out = to_image(&art, &Glyphs::builtin(CELL_W, CELL_H), &theme);
+            let half = out.width() / 2;
+            let mean = |x0: u32| {
+                let mut s = 0.0;
+                for y in 0..out.height() {
+                    for x in x0..x0 + half {
+                        s += out.get_pixel(x, y).0.iter().map(|&v| v as f32).sum::<f32>();
+                    }
+                }
+                s / (out.height() * half * 3) as f32
+            };
+            let (dark, light) = (mean(0), mean(half));
+            assert!(dark + 40.0 < light, "{name}: {dark} vs {light}");
+        }
     }
 
     #[test]

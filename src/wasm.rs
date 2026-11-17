@@ -134,6 +134,7 @@ fn read_options(options: &JsValue) -> Result<Options, JsValue> {
         overlay,
         overlay_background,
         glyphs: None,
+        colors: Default::default(),
     })
 }
 

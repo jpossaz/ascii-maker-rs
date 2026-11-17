@@ -26,7 +26,7 @@
 //! the original did, which is ~200x more work per cell for the same answer.
 
 use crate::edge;
-use crate::palette::{ColorMode, palette_f32};
+use crate::palette::{ColorMode, Colors};
 use crate::stamps::{CELL_H, CELL_PX, CELL_W, FIRST_CHAR, NCHARS, Stamps, stamps};
 
 use std::sync::Arc;
@@ -93,6 +93,10 @@ pub struct Options {
     pub overlay_background: OverlayBackground,
     /// Glyph set to match against. `None` uses the built-in one.
     pub glyphs: Option<Arc<Stamps>>,
+    /// The colours the palette slots will be shown in, which is what the
+    /// match is scored against. The default is the palette the built-in
+    /// stamps were rendered with.
+    pub colors: Colors,
 }
 
 /// One output character: a glyph plus its two palette indices.
@@ -202,10 +206,10 @@ impl<'a> Pipeline<'a> {
         let overlay = opts.overlay.as_ref().map(|layer| {
             let mut p = plane.clone();
             apply_inversion(&mut p, layer);
-            Solver::new(glyphs, p, width, rows, layer)
+            Solver::new(glyphs, &opts.colors, p, width, rows, layer)
         });
         apply_inversion(&mut plane, &opts.base);
-        let base = Solver::new(glyphs, plane, width, rows, &opts.base);
+        let base = Solver::new(glyphs, &opts.colors, plane, width, rows, &opts.base);
 
         Pipeline {
             base,
@@ -301,7 +305,9 @@ struct Solver<'a> {
     /// Edge magnitudes of the plane, present only in edge mode.
     edges: Option<Vec<f32>>,
     width: usize,
-    palette: [[f32; 3]; 16],
+    /// Slot colours as foreground and as background, 0.0-1.0.
+    fg_palette: [[f32; 3]; 16],
+    bg_palette: [[f32; 3]; 16],
     /// Candidate (background, foreground) palette pairs.
     pairs: Vec<(u8, u8)>,
     /// `NCHARS * pairs.len()` candidate-only cost terms.
@@ -311,25 +317,27 @@ struct Solver<'a> {
 impl<'a> Solver<'a> {
     fn new(
         stamps: &'a Stamps,
+        colors: &Colors,
         plane: Vec<f32>,
         width: usize,
         rows: usize,
         layer: &Layer,
     ) -> Solver<'a> {
-        let palette = palette_f32();
+        let (fg_palette, bg_palette) = (colors.fg_f32(), colors.bg_f32());
 
         let edges = layer
             .edge
             .then(|| image_edges(&plane, width, rows * CELL_H, layer.edge_gain));
         let pairs = color_pairs(layer.color, layer.background);
-        let table = cost_table(stamps, &palette, &pairs);
+        let table = cost_table(stamps, &fg_palette, &bg_palette, &pairs);
 
         Solver {
             stamps,
             plane,
             edges,
             width,
-            palette,
+            fg_palette,
+            bg_palette,
             pairs,
             table,
         }
@@ -352,7 +360,7 @@ impl<'a> Solver<'a> {
         }
         let mut bg_term = [0.0f32; 16];
         for (k, term) in bg_term.iter_mut().enumerate() {
-            let c = self.palette[k];
+            let c = self.bg_palette[k];
             *term = -2.0 * (c[0] * si[0] + c[1] * si[1] + c[2] * si[2]);
         }
 
@@ -389,16 +397,14 @@ impl<'a> Solver<'a> {
             }
             // ...projected onto each palette colour, so the pair loop below is
             // three adds rather than three dot products.
-            let mut proj = [0.0f32; 16];
-            for (k, pr) in proj.iter_mut().enumerate() {
-                let col = self.palette[k];
-                *pr = col[0] * sai[0] + col[1] * sai[1] + col[2] * sai[2];
-            }
+            let dot = |col: [f32; 3]| col[0] * sai[0] + col[1] * sai[1] + col[2] * sai[2];
+            let proj_fg = self.fg_palette.map(dot);
+            let proj_bg = self.bg_palette.map(dot);
 
             let table = &self.table[c * self.pairs.len()..(c + 1) * self.pairs.len()];
             for (&(bg, fg), &konst) in self.pairs.iter().zip(table) {
                 let cost = konst + bg_term[bg as usize]
-                    - 2.0 * (proj[fg as usize] - proj[bg as usize]);
+                    - 2.0 * (proj_fg[fg as usize] - proj_bg[bg as usize]);
                 if cost < best_cost {
                     best_cost = cost;
                     best = Cell {
@@ -508,12 +514,17 @@ fn color_pairs(mode: ColorMode, background: bool) -> Vec<(u8, u8)> {
 }
 
 /// The part of the cost that depends only on the glyph and the colour pair.
-fn cost_table(stamps: &Stamps, palette: &[[f32; 3]; 16], pairs: &[(u8, u8)]) -> Vec<f32> {
+fn cost_table(
+    stamps: &Stamps,
+    fg_palette: &[[f32; 3]; 16],
+    bg_palette: &[[f32; 3]; 16],
+    pairs: &[(u8, u8)],
+) -> Vec<f32> {
     let mut table = Vec::with_capacity(NCHARS * pairs.len());
     for c in 0..NCHARS {
         for &(bg, fg) in pairs {
-            let b = palette[bg as usize];
-            let f = palette[fg as usize];
+            let b = bg_palette[bg as usize];
+            let f = fg_palette[fg as usize];
             let mut konst = 0.0f32;
             for ch in 0..3 {
                 let d = f[ch] - b[ch];
@@ -582,8 +593,8 @@ mod tests {
     /// definition, with no algebra applied.
     fn true_cost(solver: &Solver, col: usize, row: usize, cell: Cell) -> f32 {
         let alpha = solver.stamps.alpha_of((cell.ch - FIRST_CHAR) as usize);
-        let bg = solver.palette[cell.bg as usize];
-        let fg = solver.palette[cell.fg as usize];
+        let bg = solver.bg_palette[cell.bg as usize];
+        let fg = solver.fg_palette[cell.fg as usize];
         let (x0, y0) = (col * CELL_W, row * CELL_H);
 
         let mut cost = 0.0f32;
@@ -642,6 +653,7 @@ mod tests {
             assert!(rows > 0 && cols > 0);
             let solver = Solver::new(
                 stamps(),
+                &Colors::default(),
                 resize_plane(&img, cols * CELL_W, rows * CELL_H),
                 cols * CELL_W,
                 rows,
@@ -720,6 +732,7 @@ mod tests {
         // Whatever glyph it lands on, its edge stamp must be the closest one.
         let solver = Solver::new(
             stamps(),
+            &Colors::default(),
             resize_plane(&img, CELL_W, CELL_H),
             CELL_W,
             1,

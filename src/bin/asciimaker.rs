@@ -109,6 +109,13 @@ struct Args {
           value_parser = clap::builder::PossibleValuesParser::new(ascii_maker::raster::Theme::names()))]
     theme: String,
 
+    /// Match against the tool's own palette and only show the result in
+    /// --theme's colours, instead of matching against the theme itself. Hues
+    /// shift to whatever the theme puts in each slot
+    #[cfg(feature = "raster")]
+    #[arg(long)]
+    theme_recolor: bool,
+
     /// Height in pixels of one character cell in PNG output; cells are half
     /// as wide. The built-in glyphs are drawn at 20
     #[cfg(feature = "raster")]
@@ -211,6 +218,7 @@ fn run(args: &Args) -> anyhow::Result<()> {
         }),
         overlay_background: args.overlay_background.into(),
         glyphs: None,
+        colors: Default::default(),
     };
 
     #[cfg(feature = "raster")]
@@ -231,6 +239,13 @@ fn run(args: &Args) -> anyhow::Result<()> {
         glyphs: font_glyphs
             .as_ref()
             .map(|(m, _)| std::sync::Arc::new(m.stamps())),
+        colors: if args.theme_recolor {
+            Default::default()
+        } else {
+            ascii_maker::raster::Theme::by_name(&args.theme)
+                .expect("clap checked the name")
+                .colors()
+        },
         ..opts
     };
 
